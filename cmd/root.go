@@ -10,6 +10,7 @@ import (
 	"os"
 
 	client "argocd-pod-enrichment-webhook/pkg/kubernetesclient"
+	argocdtracking "argocd-pod-enrichment-webhook/pkg/argocdresourcetracking"
 
 	"github.com/spf13/cobra"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -82,6 +83,27 @@ func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (
 	return admissionReviewRequest, nil
 }
 
+func runWebhookServer(certFile, keyFile string) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Starting webhook server")
+	http.HandleFunc("/mutate", mutatePod)
+	server := http.Server{
+		Addr: fmt.Sprintf(":%d", port),
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		},
+		ErrorLog: logger,
+	}
+
+	if err := server.ListenAndServeTLS("", ""); err != nil {
+		panic(err)
+	}
+}
+
 func mutatePod(w http.ResponseWriter, r *http.Request) {
 	logger.Printf("received message on mutate")
 
@@ -89,6 +111,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 	// Parse the AdmissionReview from the http request.
 	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
+
 	if err != nil {
 		msg := fmt.Sprintf("error getting admission review from request: %v", err)
 		logger.Printf(msg)
@@ -123,6 +146,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client, err := client.NewInClusterKubernetesClient()
+
 	if err != nil {
 		msg := fmt.Sprintf("error creating in-cluster kubernetes client: %v", err)
 		logger.Printf(msg)
@@ -141,61 +165,45 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Printf("topmost owner of pod %s/%s is %s/%s", pod.GetNamespace(), pod.GetName(), owner.GetKind(), owner.GetName())
+	argocdtracking := argocdtracking.ExtractArgoCDTrackingInfo(*owner)
 
-	// Create a response that will add a label to the pod if it does
-	// not already have a label with the key of "hello". In this case
-	// it does not matter what the value is, as long as the key exists.
-	admissionResponse := &admissionv1.AdmissionResponse{}
-	var patch string
-	patchType := admissionv1.PatchTypeJSONPatch
+	logger.Printf("Extracted ArgoCD tracking info: %+v", argocdtracking)
 
-	if _, ok := pod.GetLabels()["hello"]; !ok {
-		patch = `[{"op":"add","path":"/metadata/labels/hello", "value": "world"}]`
-	}
+	if argocdtracking != nil {
+		// Create a response that will add a label to the pod if it does
+		// not already have a label with the key of "hello". In this case
+		// it does not matter what the value is, as long as the key exists.
+		admissionResponse := &admissionv1.AdmissionResponse{}
+		var patch string
+		patchType := admissionv1.PatchTypeJSONPatch
 
-	admissionResponse.Allowed = true
-	if patch != "" {
-		admissionResponse.PatchType = &patchType
-		admissionResponse.Patch = []byte(patch)
-	}
+		if _, ok := pod.GetLabels()["argocd-application"]; !ok {
+			patch = `[{"op":"add","path":"/metadata/labels/argocd-application", "value": "` + argocdtracking.ApplicationName + `"}]`
+		}
 
-	// Construct the response, which is just another AdmissionReview.
-	var admissionReviewResponse admissionv1.AdmissionReview
-	admissionReviewResponse.Response = admissionResponse
-	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
-	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
+		admissionResponse.Allowed = true
+		if patch != "" {
+			admissionResponse.PatchType = &patchType
+			admissionResponse.Patch = []byte(patch)
+		}
 
-	resp, err := json.Marshal(admissionReviewResponse)
-	if err != nil {
-		msg := fmt.Sprintf("error marshalling response json: %v", err)
-		logger.Printf(msg)
-		w.WriteHeader(500)
-		w.Write([]byte(msg))
-		return
-	}
+		// Construct the response, which is just another AdmissionReview.
+		var admissionReviewResponse admissionv1.AdmissionReview
+		admissionReviewResponse.Response = admissionResponse
+		admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
+		admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
-}
+		resp, err := json.Marshal(admissionReviewResponse)
 
-func runWebhookServer(certFile, keyFile string) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		panic(err)
-	}
+		if err != nil {
+			msg := fmt.Sprintf("error marshalling response json: %v", err)
+			logger.Printf(msg)
+			w.WriteHeader(500)
+			w.Write([]byte(msg))
+			return
+		}
 
-	fmt.Println("Starting webhook server")
-	http.HandleFunc("/mutate", mutatePod)
-	server := http.Server{
-		Addr: fmt.Sprintf(":%d", port),
-		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		},
-		ErrorLog: logger,
-	}
-
-	if err := server.ListenAndServeTLS("", ""); err != nil {
-		panic(err)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(resp)
 	}
 }

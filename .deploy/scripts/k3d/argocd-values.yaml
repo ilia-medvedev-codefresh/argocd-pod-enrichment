@@ -1,0 +1,5 @@
+configs:
+  cm:
+    installationID: my-argocd
+  params:
+    application.namespaces: argocd-apps
