@@ -1,12 +1,16 @@
 package kubernetesclient
 
 import (
-	dyclient "k8s.io/client-go/dynamic"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/rest"
+	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
+	dyclient "k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 )
 
 type KubernetesClient struct {
@@ -32,36 +36,50 @@ func NewInClusterKubernetesClient() (*KubernetesClient, error) {
 	return &KubernetesClient{DynamicClient: dynClient, discoveryClient: discoveryClient}, nil
 }
 
-func (c *KubernetesClient) IsResourceNamespaced(apiVersion, kind string) (bool, error) {
-	apiResourceLists, err := c.discoveryClient.ServerResourcesForGroupVersion(apiVersion)
+func (c *KubernetesClient) GetTopmostControllerOwner(res *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 
-	if err != nil {
-		return false, fmt.Errorf("error getting API resource list: %v", err)
-	}
+	owners := res.GetOwnerReferences()
 
-	for _, res := range apiResourceLists.APIResources {
+	for _, ownerRef := range owners {
 
-		if res.Kind == kind {
-			if res.Namespaced {
-				return true, nil
-			} else {
-				return false, nil
+		if ownerRef.Controller != nil && *ownerRef.Controller {
+			gvr, isNamespaced, err := c.gvrFromAPIVersionKind(ownerRef.APIVersion, ownerRef.Kind)
+
+			if err != nil {
+				return nil, fmt.Errorf("error getting GVR from apiVersion/kind: %v", err)
 			}
+
+			var ownerRes *unstructured.Unstructured
+
+			if isNamespaced {
+				// If the owner is namespaced, we need to get it from the same namespace
+				ownerRes, err = c.DynamicClient.Resource(gvr).Namespace(res.GetNamespace()).Get(context.TODO(), ownerRef.Name, metav1.GetOptions{})
+			} else {
+				ownerRes, err = c.DynamicClient.Resource(gvr).Get(context.TODO(), ownerRef.Name, metav1.GetOptions{})
+			}
+
+			if err != nil {
+				return nil, fmt.Errorf("error getting owner resource %s/%s: %v", ownerRef.Kind, ownerRef.Name, err)
+			}
+
+			// Recursively get the topmost owner
+			return c.GetTopmostControllerOwner(ownerRes)
 		}
 	}
 
-	return false, fmt.Errorf("resource kind %s not found in API version %s", kind, apiVersion)
+	return res, nil
 }
 
 // GVRFromAPIVersionKind returns the GroupVersionResource for the given apiVersion and kind using discoveryClient.
-func (c *KubernetesClient) GVRFromAPIVersionKind(apiVersion, kind string) (schema.GroupVersionResource, error) {
+// It also returns a boolean indicating if the resource is namespaced.
+func (c *KubernetesClient) gvrFromAPIVersionKind(apiVersion, kind string) (schema.GroupVersionResource, bool, error) {
 	gv, err := schema.ParseGroupVersion(apiVersion)
 	if err != nil {
-		return schema.GroupVersionResource{}, err
+		return schema.GroupVersionResource{}, false, err
 	}
 	resourceList, err := c.discoveryClient.ServerResourcesForGroupVersion(apiVersion)
 	if err != nil {
-		return schema.GroupVersionResource{}, err
+		return schema.GroupVersionResource{}, false, err
 	}
 	for _, res := range resourceList.APIResources {
 		if res.Kind == kind && !strings.Contains(res.Name, "/") {
@@ -69,8 +87,9 @@ func (c *KubernetesClient) GVRFromAPIVersionKind(apiVersion, kind string) (schem
 				Group:    gv.Group,
 				Version:  gv.Version,
 				Resource: res.Name,
-			}, nil
+			}, res.Namespaced, nil
 		}
 	}
-	return schema.GroupVersionResource{}, fmt.Errorf("resource for kind %s not found in %s", kind, apiVersion)
+
+	return schema.GroupVersionResource{}, false, fmt.Errorf("resource for kind %s not found in %s", kind, apiVersion)
 }

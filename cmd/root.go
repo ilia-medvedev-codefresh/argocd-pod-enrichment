@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -114,6 +113,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	rawRequest := admissionReviewRequest.Request.Object.Raw
 
 	pod := unstructured.Unstructured{}
+
 	if _, _, err := deserializer.Decode(rawRequest, nil, &pod); err != nil {
 		msg := fmt.Sprintf("error converting raw pod to unstructured: %v", err)
 		logger.Printf(msg)
@@ -122,62 +122,26 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// check ownership
-	if len(pod.GetOwnerReferences()) > 0 {
-		owner := pod.GetOwnerReferences()[0]
-		logger.Printf("Pod %s is owned by %s/%s", owner.Name, owner.Kind, owner.Name)
-
-		cl, err := client.NewInClusterKubernetesClient()
-
-		if err != nil {
-			msg := fmt.Sprintf("error creating in-cluster k8s client: %v", err)
-			logger.Printf(msg)
-			w.WriteHeader(500)
-			w.Write([]byte(msg))
-			return
-		}
-
-		isNamespaced, err := cl.IsResourceNamespaced(owner.APIVersion, owner.Kind)
-
-		if err != nil {
-			msg := fmt.Sprintf("error checking if resource is namespaced: %v", err)
-			logger.Printf(msg)
-			w.WriteHeader(500)
-			w.Write([]byte(msg))
-			return
-		}
-
-		gvr, err := cl.GVRFromAPIVersionKind(owner.APIVersion, owner.Kind)
-
-		if err != nil {
-			msg := fmt.Sprintf("error getting GVR from apiVersion/kind: %v", err)
-			logger.Printf(msg)
-			w.WriteHeader(500)
-			w.Write([]byte(msg))
-			return
-		}
-
-		var parent *unstructured.Unstructured
-
-		if isNamespaced {
-			parent, err = cl.DynamicClient.Resource(gvr).Namespace(pod.GetNamespace()).Get(context.TODO(), owner.Name, metav1.GetOptions{})
-		} else {
-			parent, err = cl.DynamicClient.Resource(gvr).Get(context.TODO(), owner.Name, metav1.GetOptions{})
-		}
-
-		if err != nil {
-			msg := fmt.Sprintf("error getting owner resource %s/%s: %v", owner.Kind, owner.Name, err)
-			logger.Printf(msg)
-			w.WriteHeader(500)
-			w.Write([]byte(msg))
-			return
-		}
-
-		logger.Printf("Owner resource data: %v", parent.GetAPIVersion())
-
-		logger.Printf("Owner %s/%s is namespaced: %v", owner.Kind, owner.Name, isNamespaced)
+	client, err := client.NewInClusterKubernetesClient()
+	if err != nil {
+		msg := fmt.Sprintf("error creating in-cluster kubernetes client: %v", err)
+		logger.Printf(msg)
+		w.WriteHeader(500)
+		w.Write([]byte(msg))
+		return
 	}
 
+	owner, err := client.GetTopmostControllerOwner(&pod)
+
+	if err != nil {
+		msg := fmt.Sprintf("error getting topmost controller owner: %v", err)
+		logger.Printf(msg)
+		w.WriteHeader(500)
+		w.Write([]byte(msg))
+		return
+	}
+
+	logger.Printf("topmost owner of pod %s/%s is %s/%s", pod.GetNamespace(), pod.GetName(), owner.GetKind(), owner.GetName())
 
 	// Create a response that will add a label to the pod if it does
 	// not already have a label with the key of "hello". In this case
