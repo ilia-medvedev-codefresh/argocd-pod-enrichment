@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mutating-webhook-service
+  namespace: default
+spec:
+  ports:
+    - port: 443
+      targetPort: 8443
+  selector:
+    app: mutating-webhook
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mutating-webhook
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mutating-webhook
+  template:
+    metadata:
+      labels:
+        app: mutating-webhook
+    spec:
+      serviceAccountName: argocd-pod-enrichment
+      containers:
+        - name: webhook
+          image: k3d-registry.localhost:5050/webhook-example:latest
+          args:
+            - --tls-cert=/certs/tls.crt
+            - --tls-key=/certs/tls.key
+            - --port=8443
+          ports:
+            - containerPort: 8443
+          volumeMounts:
+            - name: webhook-certs
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: webhook-server-tls

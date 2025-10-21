@@ -1,0 +1,29 @@
+{
+    "feature": {
+        "network": {
+            "incoming": {
+                "mode": "steal"
+            }
+        },
+        "fs": {
+            "mode": "localwithoverrides",
+            "local": [".+\\.go"],
+            "read_only": [ "/certs", "/var/run/secrets" ]
+        },
+        "env": true
+    },
+    "target": {
+        "namespace": "default",
+        "path": {
+            "deployment": "mutating-webhook"
+        }
+    },
+    "agent": {
+        "ephemeral": false,
+        "resources": {
+            "cpu": "100m",
+            "memory": "128Mi"
+        },
+        "namespace": "default"
+    }
+}
