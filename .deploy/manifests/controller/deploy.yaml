@@ -1,0 +1,25 @@
+# apiVersion: v1
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-pod-enrichment-controller
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: argocd-pod-enrichment-controller
+  template:
+    metadata:
+      labels:
+        app: argocd-pod-enrichment-controller
+    spec:
+      serviceAccountName: argocd-pod-enrichment-controller
+      containers:
+        - name: controller
+          image: quay.io/iliasandbox/argocd-pod-enrichment:controller-test
+          args:
+            - controller
+          env:
+            - name: ARGOCD_NAMESPACE
+              value: "argocd"

@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: argocd-pod-enrichment-read-all-binding
+  name: argocd-pod-enrichment-webhook-read-all-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: argocd-pod-enrichment-read-all
+  name: argocd-pod-enrichment-webhook-read-all
 subjects:
   - kind: ServiceAccount
-    name: argocd-pod-enrichment
+    name: argocd-pod-enrichment-webhook
     namespace: default
