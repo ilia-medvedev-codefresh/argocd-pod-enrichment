@@ -1,0 +1,20 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: argocd-pod-enrichment
+webhooks:
+  - name: argocd-pod-enrichment.codefresh.io
+    clientConfig:
+      service:
+        name: argocd-pod-enrichment-webhook
+        namespace: default
+        path: /mutate
+      caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNwakNDQVk0Q0NRQ0JYQlZ3SjN3akF6QU5CZ2txaGtpRzl3MEJBUXNGQURBVk1STXdFUVlEVlFRRERBcFgKWldKb2IyOXJJRU5CTUI0WERUSTFNVEF5TWpFeU1UTXpNVm9YRFRJMk1UQXlNakV5TVRNek1Wb3dGVEVUTUJFRwpBMVVFQXd3S1YyVmlhRzl2YXlCRFFUQ0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0NnZ0VCCkFMS29xWTZTZXJkcStGYzdFdWt1ZzJHTnprakxWMktaUFNkdEJ5NG1jU0ZvZ2Ftb3VQV3F1RW9SKzQxanliZEYKdHJSM2liMkY0NmJZUVA3b2pPKzBudGJRTEpESWZycFhpTFpUeS9zaGJ6UW42VGdVTnVNOENVdHFDQmJEdTk3Ywp2bUNDUy8yL2tNNWdpYUsydGJqSWpDSitzelBkeERBc2liTW9GalFZWnZYQTZwbitTeXJlNzg1UFdyYWZBbWIzCmtXZmdMcC8vWkMvNHV0Yjd6algxYy9DYUE4SEVnaEVKdkc0VzY4ZXRpeVpjUXBxdUlQZmZMakMwNUtWL245VnMKMUpQaGlYaHo4aHlET1piT0lrS21RcW90eHAyU0xFNnFxdjdGYzR0MkJkSFgzSmtJd3FVRXhRMHZPVDk2ZHBsbQp5S2RGLzZsYjVIVXFTd0IvWnhUbjUrVUNBd0VBQVRBTkJna3Foa2lHOXcwQkFRc0ZBQU9DQVFFQWdLMkFUanRmCkRZSmg5Y3ZpeFVjdlJQTVgwVFhMS3d2MzE0L0dtZ0VqMXlXMFc2YVQvRGlSOFU5RUZhYS9aMERyWUVseCtPTGcKcCtMdGhkU0dUbGJoWFRBelA5ektqN3RWR0p3MkpWTXdhMEFvdCtZNkN1djNWYXhVSDlUQUtuZThFR3k3R0pieAp2eGJUbDV6eGtxZHlmaW4xZElDVjJLMUhXalpPdkVvWWhGSi9kYzB0MXo0OGQwUWVsUmpFdzY5QnNoOGlWYzd0CjBKU0RvMGRlMjR6L3pvTng3RTRDT2JQM29YTlh4dHNFRUtXN1orb3JRVDIyWVAyYStZNmxhVjhTUGpwSm9aaEYKc3RUbUhtUEtrVlR3Lzhxa3FjbWdZWkd3WXF5cEp4OWcydmppUHRTdEpkd1NBa0RyQzgzaS9MS0MwWEwwbDFFOApTcCswRGg0R2wweDR6UT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Ignore

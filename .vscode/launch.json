@@ -17,6 +17,21 @@
                 "KUBECONFIG": "${workspaceFolder}/.deploy/kubeconfig.yaml",
                 "MIRRORD_CONFIG_FILE": "${workspaceFolder}/.mirrord/mirrord-config.json"
             }
+        },
+        {
+            "name": "Debug Controller",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "controller",
+            ],
+            "env": {
+                "KUBECONFIG": "${workspaceFolder}/.deploy/kubeconfig.yaml",
+                "NAMESPACE": "default",
+                "ARGOCD_NAMESPACE": "argocd"
+            }
         }
     ]
 }

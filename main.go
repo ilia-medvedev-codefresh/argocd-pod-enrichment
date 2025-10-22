@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"os"
 	"github.com/spf13/cobra"
-	"argocd-pod-enrichment-webhook/cmd/webhook"
+	"argocd-pod-enrichment/cmd/webhook"
+	"argocd-pod-enrichment/cmd/controller"
 )
 
 var rootCmd = &cobra.Command{
@@ -21,6 +22,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(webhook.WebhookCmd)
+	rootCmd.AddCommand(controller.ControllerCmd)
 }
 
 func main() {

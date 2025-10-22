@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "$0")"
 
 CERTS_DIR="../certs"
-MANIFESTS_DIR="../manifests"
+MANIFESTS_DIR="../manifests/webhook"
 WEBHOOK_YAML="$MANIFESTS_DIR/webhook.yaml"
 SECRET_YAML="$MANIFESTS_DIR/secret.yaml"
 CONF_FILE="webhook-csr.conf"

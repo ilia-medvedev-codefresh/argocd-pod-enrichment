@@ -3,6 +3,7 @@ package kubernetesclient
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/client-go/discovery"
 	dyclient "k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type KubernetesClient struct {
@@ -20,20 +22,29 @@ type KubernetesClient struct {
 
 // NewInClusterKubernetesClient initializes a dynamic client using in-cluster config
 func NewInClusterKubernetesClient() (*KubernetesClient, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		 return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
-	}
-	dynClient, err := dyclient.NewForConfig(config)
-	if err != nil {
-		 return nil, fmt.Errorf("failed to create dynamic client: %w", err)
-	}
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to create discovery client: %w", err)
-	}
-	return &KubernetesClient{DynamicClient: dynClient, discoveryClient: discoveryClient}, nil
+       var config *rest.Config
+       var err error
+       kubeconfig := os.Getenv("KUBECONFIG")
+       if kubeconfig != "" {
+	       config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	       if err != nil {
+		       return nil, fmt.Errorf("failed to build config from KUBECONFIG: %w", err)
+	       }
+       } else {
+	       config, err = rest.InClusterConfig()
+	       if err != nil {
+		       return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
+	       }
+       }
+       dynClient, err := dyclient.NewForConfig(config)
+       if err != nil {
+	       return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+       }
+       discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+       if err != nil {
+	       return nil, fmt.Errorf("failed to create discovery client: %w", err)
+       }
+       return &KubernetesClient{DynamicClient: dynClient, discoveryClient: discoveryClient}, nil
 }
 
 func (c *KubernetesClient) GetTopmostControllerOwner(res *unstructured.Unstructured) (*unstructured.Unstructured, error) {
