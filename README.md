@@ -1,26 +1,31 @@
-# Mutating Webhook Example
+# ArgoCD Pod Enrichment Webhook
 
-This project implements a simple Kubernetes mutating admission webhook in Go 1.24. It adds the label `hello: world` to all pods if the label does not already exist.
+This project implements a Kubernetes mutating admission webhook in Go. The webhook command propagates ArgoCD ownership information (application name, namespace, and installation ID) from any top-level resource down to a pod by adding the relevant labels to the pod.
 
-## Files
-- `main.go`: Webhook server implementation
-- `deploy.yaml`: Deployment and Service manifest
-- `webhook.yaml`: MutatingWebhookConfiguration manifest
-- `generate-certs.sh`: Script to generate self-signed TLS certificates
+## Features
+- Extracts ArgoCD tracking information from the topmost owner of a pod (e.g., Deployment, StatefulSet, etc.).
+- Adds or updates the following labels on the pod:
+  - Application name
+  - Application namespace
+  - Installation ID
 
-## Quick Start
+## Usage
 
-1. Generate TLS certificates:
-   ```sh
-   ./generate-certs.sh
-   ```
-2. Build and containerize the webhook server, push to your registry, and update the image in `deploy.yaml`.
-3. Apply the manifests:
-   ```sh
-   kubectl apply -f deploy.yaml
-   kubectl apply -f webhook.yaml
-   ```
-4. Make sure to replace `<CA_BUNDLE>` in `webhook.yaml` with the base64-encoded contents of `tls.crt`.
+### Mutating webhook
+
+```sh
+argocd-pod-enrichment webhook --tls-cert <cert> --tls-key <key> --port <port>
+```
+
+- `--tls-cert`: Path to the TLS certificate file (default: `/certs/tls.crt`)
+- `--tls-key`: Path to the TLS private key file (default: `/certs/tls.key`)
+- `--port`: Port to listen on for HTTPS traffic (default: `8443`)
+
+### Example Deployment
+
+1. Build and containerize the webhook server, push to your registry, and update the image in your deployment manifest.
+2. Apply the manifests for the webhook deployment and `MutatingWebhookConfiguration`.
+3. Ensure the webhook has access to the Kubernetes API and the necessary RBAC permissions.
 
 ## Requirements
 - Go 1.24
@@ -28,4 +33,4 @@ This project implements a simple Kubernetes mutating admission webhook in Go 1.2
 
 ---
 
-This is a minimal example for educational/demo purposes. For production, add authentication, logging, and error handling improvements.
+This webhook is designed to work with ArgoCD-managed resources and will automatically propagate ArgoCD application ownership labels to pods, making it easier to track and manage workloads in your cluster.
