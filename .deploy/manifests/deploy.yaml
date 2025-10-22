@@ -28,7 +28,7 @@ spec:
       serviceAccountName: argocd-pod-enrichment
       containers:
         - name: webhook
-          image: k3d-registry.localhost:5050/argocd-pod-enrichment:latest
+          image: quay.io/iliasandbox/argocd-pod-enrichment:main
           args:
             - webhook
             - --tls-cert=/certs/tls.crt
