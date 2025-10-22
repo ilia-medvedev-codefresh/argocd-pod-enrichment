@@ -28,8 +28,9 @@ spec:
       serviceAccountName: argocd-pod-enrichment
       containers:
         - name: webhook
-          image: k3d-registry.localhost:5050/webhook-example:latest
+          image: k3d-registry.localhost:5050/argocd-pod-enrichment:latest
           args:
+            - webhook
             - --tls-cert=/certs/tls.crt
             - --tls-key=/certs/tls.key
             - --port=8443

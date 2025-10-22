@@ -10,6 +10,9 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}",
+            "args": [
+                "webhook",
+            ],
             "env": {
                 "KUBECONFIG": "${workspaceFolder}/.deploy/kubeconfig.yaml",
                 "MIRRORD_CONFIG_FILE": "${workspaceFolder}/.mirrord/mirrord-config.json"

@@ -1,8 +1,9 @@
-package cmd
+package webhook
 
 import (
 	"crypto/tls"
 	"encoding/json"
+	"strings"
 	"fmt"
 	"io"
 	"log"
@@ -17,8 +18,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	consts "argocd-pod-enrichment-webhook/pkg/consts/webhook"
 )
 
 var (
@@ -29,13 +30,13 @@ var (
 	logger  = log.New(os.Stdout, "http: ", log.LstdFlags)
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "mutating-webhook",
-	Short: "Kubernetes mutating webhook example",
-	Long: `Example showing how to implement a basic mutating webhook in Kubernetes.
+var WebhookCmd = &cobra.Command{
+	Use:   "webhook",
+	Short: "Kubernetes mutating webhook",
+	Long: `Run the mutating webhook server for ArgoCD pod enrichment.
 
 Example:
-$ mutating-webhook --tls-cert <tls_cert> --tls-key <tls_key> --port <port>`,
+$ argocd-pod-enrichment webhook --tls-cert <tls_cert> --tls-key <tls_key> --port <port>`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if tlsCert == "" || tlsKey == "" {
 			fmt.Println("--tls-cert and --tls-key required")
@@ -45,26 +46,16 @@ $ mutating-webhook --tls-cert <tls_cert> --tls-key <tls_key> --port <port>`,
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	cobra.CheckErr(rootCmd.Execute())
-}
-
 func init() {
-	rootCmd.Flags().StringVar(&tlsCert, "tls-cert", "/certs/tls.crt", "Certificate for TLS")
-	rootCmd.Flags().StringVar(&tlsKey, "tls-key", "/certs/tls.key", "Private key file for TLS")
-	rootCmd.Flags().IntVar(&port, "port", 8443, "Port to listen on for HTTPS traffic")
+	WebhookCmd.Flags().StringVar(&tlsCert, "tls-cert", "/certs/tls.crt", "Certificate for TLS")
+	WebhookCmd.Flags().StringVar(&tlsKey, "tls-key", "/certs/tls.key", "Private key file for TLS")
+	WebhookCmd.Flags().IntVar(&port, "port", 8443, "Port to listen on for HTTPS traffic")
 }
 
 func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (*admissionv1.AdmissionReview, error) {
-	// Validate that the incoming content type is correct.
 	if r.Header.Get("Content-Type") != "application/json" {
 		return nil, fmt.Errorf("expected application/json content-type")
 	}
-
-	// Get the body data, which will be the AdmissionReview
-	// content for the request.
 	var body []byte
 	if r.Body != nil {
 		requestData, err := io.ReadAll(r.Body)
@@ -73,13 +64,10 @@ func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (
 		}
 		body = requestData
 	}
-
-	// Decode the request body into
 	admissionReviewRequest := &admissionv1.AdmissionReview{}
-	if _, _, err := deserializer.Decode(body, nil, admissionReviewRequest); err != nil {
+	if _, _, err := codecs.UniversalDeserializer().Decode(body, nil, admissionReviewRequest); err != nil {
 		return nil, err
 	}
-
 	return admissionReviewRequest, nil
 }
 
@@ -88,7 +76,6 @@ func runWebhookServer(certFile, keyFile string) {
 	if err != nil {
 		panic(err)
 	}
-
 	fmt.Println("Starting webhook server")
 	http.HandleFunc("/mutate", mutatePod)
 	server := http.Server{
@@ -98,112 +85,105 @@ func runWebhookServer(certFile, keyFile string) {
 		},
 		ErrorLog: logger,
 	}
-
 	if err := server.ListenAndServeTLS("", ""); err != nil {
 		panic(err)
 	}
 }
 
 func mutatePod(w http.ResponseWriter, r *http.Request) {
-	logger.Printf("received message on mutate")
-
+	logger.Print("received message on mutate")
 	deserializer := codecs.UniversalDeserializer()
-
-	// Parse the AdmissionReview from the http request.
 	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
-
 	if err != nil {
 		msg := fmt.Sprintf("error getting admission review from request: %v", err)
-		logger.Printf(msg)
+		logger.Print(msg)
 		w.WriteHeader(400)
 		w.Write([]byte(msg))
 		return
 	}
-
-	// Do server-side validation that we are only dealing with a pod resource. This
-	// should also be part of the MutatingWebhookConfiguration in the cluster, but
-	// we should verify here before continuing.
 	podResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 	if admissionReviewRequest.Request.Resource != podResource {
 		msg := fmt.Sprintf("did not receive pod, got %s", admissionReviewRequest.Request.Resource.Resource)
-		logger.Printf(msg)
+		logger.Print(msg)
 		w.WriteHeader(400)
 		w.Write([]byte(msg))
 		return
 	}
-
-	// Decode the pod from the AdmissionReview.
 	rawRequest := admissionReviewRequest.Request.Object.Raw
-
 	pod := unstructured.Unstructured{}
-
 	if _, _, err := deserializer.Decode(rawRequest, nil, &pod); err != nil {
 		msg := fmt.Sprintf("error converting raw pod to unstructured: %v", err)
-		logger.Printf(msg)
+		logger.Print(msg)
 		w.WriteHeader(500)
 		w.Write([]byte(msg))
 		return
 	}
-
 	client, err := client.NewInClusterKubernetesClient()
-
 	if err != nil {
 		msg := fmt.Sprintf("error creating in-cluster kubernetes client: %v", err)
-		logger.Printf(msg)
+		logger.Print(msg)
 		w.WriteHeader(500)
 		w.Write([]byte(msg))
 		return
 	}
-
 	owner, err := client.GetTopmostControllerOwner(&pod)
-
 	if err != nil {
 		msg := fmt.Sprintf("error getting topmost controller owner: %v", err)
-		logger.Printf(msg)
+		logger.Print(msg)
 		w.WriteHeader(500)
 		w.Write([]byte(msg))
 		return
 	}
 
 	argocdtracking := argocdtracking.ExtractArgoCDTrackingInfo(*owner)
-
 	logger.Printf("Extracted ArgoCD tracking info: %+v", argocdtracking)
 
 	if argocdtracking != nil {
-		// Create a response that will add a label to the pod if it does
-		// not already have a label with the key of "hello". In this case
-		// it does not matter what the value is, as long as the key exists.
-		admissionResponse := &admissionv1.AdmissionResponse{}
-		var patch string
-		patchType := admissionv1.PatchTypeJSONPatch
 
-		if _, ok := pod.GetLabels()["argocd-application"]; !ok {
-			patch = `[{"op":"add","path":"/metadata/labels/argocd-application", "value": "` + argocdtracking.ApplicationName + `"}]`
-		}
-
-		admissionResponse.Allowed = true
-		if patch != "" {
-			admissionResponse.PatchType = &patchType
-			admissionResponse.Patch = []byte(patch)
-		}
-
-		// Construct the response, which is just another AdmissionReview.
-		var admissionReviewResponse admissionv1.AdmissionReview
-		admissionReviewResponse.Response = admissionResponse
+		admissionReviewResponse := constructResponse(argocdtracking)
 		admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
 		admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
 
 		resp, err := json.Marshal(admissionReviewResponse)
-
 		if err != nil {
 			msg := fmt.Sprintf("error marshalling response json: %v", err)
-			logger.Printf(msg)
+			logger.Print(msg)
 			w.WriteHeader(500)
 			w.Write([]byte(msg))
 			return
 		}
-
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(resp)
 	}
+}
+
+func constructResponse(argocdtracking *argocdtracking.ArgoCDTrackingInfo) *admissionv1.AdmissionReview {
+	admissionResponse := &admissionv1.AdmissionResponse{}
+	var patch string
+	patchType := admissionv1.PatchTypeJSONPatch
+
+	appLabelPath := "/metadata/labels/" + strings.ReplaceAll(consts.ApplicationLabelKey, "/", "~1")
+	patchOperations := []string{`{"op":"add","path":"` + appLabelPath + `", "value": "` + argocdtracking.ApplicationName + `"}`}
+
+	if argocdtracking.ApplicationNamespace != "" {
+		nsLabelPath := "/metadata/labels/" + strings.ReplaceAll(consts.ApplicationNamespaceLabelKey, "/", "~1")
+		patchOperations = append(patchOperations, `{"op":"add","path":"` + nsLabelPath + `", "value": "` + argocdtracking.ApplicationNamespace + `"}`)
+	}
+
+	if argocdtracking.InstallationID != "" {
+		idLabelPath := "/metadata/labels/" + strings.ReplaceAll(consts.InstallationIDLabelKey, "/", "~1")
+		patchOperations = append(patchOperations, `{"op":"add","path":"` + idLabelPath + `", "value": "` + argocdtracking.InstallationID + `"}`)
+	}
+
+	patch = "[" +  strings.Join(patchOperations, ",") + "]"
+
+	admissionResponse.Allowed = true
+	if patch != "" {
+		admissionResponse.PatchType = &patchType
+		admissionResponse.Patch = []byte(patch)
+	}
+	var admissionReviewResponse admissionv1.AdmissionReview
+	admissionReviewResponse.Response = admissionResponse
+
+	return &admissionReviewResponse
 }

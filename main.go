@@ -1,22 +1,28 @@
-/*
-Copyright © 2021 NAME HERE <EMAIL ADDRESS>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package main
 
-import "argocd-pod-enrichment-webhook/cmd"
+import (
+	"fmt"
+	"os"
+	"github.com/spf13/cobra"
+	"argocd-pod-enrichment-webhook/cmd/webhook"
+)
+
+var rootCmd = &cobra.Command{
+   Use:   "argocd-pod-enrichment",
+   Short: "ArgoCD Pod Enrichment",
+   Run: func(cmd *cobra.Command, args []string) {
+	   fmt.Println("Available subcommands:")
+	   for _, c := range cmd.Commands() {
+		   fmt.Printf("  %s\t%s\n", c.Name(), c.Short)
+	   }
+	   os.Exit(0)
+   },
+}
+
+func init() {
+	rootCmd.AddCommand(webhook.WebhookCmd)
+}
 
 func main() {
-	cmd.Execute()
+	cobra.CheckErr(rootCmd.Execute())
 }

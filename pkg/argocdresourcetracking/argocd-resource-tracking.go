@@ -1,7 +1,7 @@
 package argocdresourcetracking
 
 import (
-	"argocd-pod-enrichment-webhook/pkg/consts"
+	"argocd-pod-enrichment-webhook/pkg/consts/argocd"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"os"
 	"strings"
@@ -18,7 +18,6 @@ func ExtractArgoCDTrackingInfo(resource unstructured.Unstructured) *ArgoCDTracki
 
 	var (
 		applicationName      string
-		installationID       string
 		applicationNamespace string
 	)
 
@@ -38,11 +37,11 @@ func ExtractArgoCDTrackingInfo(resource unstructured.Unstructured) *ArgoCDTracki
 		appNameAndNamespaceSlice := strings.Split(firstPart, "_")
 
 		if len(appNameAndNamespaceSlice) > 0 {
-			applicationName = appNameAndNamespaceSlice[0]
+			applicationName = appNameAndNamespaceSlice[len(appNameAndNamespaceSlice)-1]
 		}
 
 		if len(appNameAndNamespaceSlice) > 1 {
-			applicationNamespace = appNameAndNamespaceSlice[len(appNameAndNamespaceSlice)-1]
+			applicationNamespace = appNameAndNamespaceSlice[0]
 		}
 	} else {
 		// Check if ArgoCDTrackingLabelEnvironmentVariable is set in the environment
@@ -60,6 +59,8 @@ func ExtractArgoCDTrackingInfo(resource unstructured.Unstructured) *ArgoCDTracki
 			}
 		}
 	}
+
+	installationID  := annotations[consts.ArgoCDInstallationIDAnnotation]
 
 	if applicationName != "" {
 		return &ArgoCDTrackingInfo{

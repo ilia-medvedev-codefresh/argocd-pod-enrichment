@@ -4,10 +4,9 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o webhook-server ./
+RUN go build -o argocd-pod-enrichment ./
 
 FROM alpine:3.19
 WORKDIR /app
-COPY --from=builder /app/webhook-server .
-EXPOSE 8443
-ENTRYPOINT ["/app/webhook-server"]
+COPY --from=builder /app/argocd-pod-enrichment .
+ENTRYPOINT ["/app/argocd-pod-enrichment"]
