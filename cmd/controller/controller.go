@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
-	"context"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -18,8 +17,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"argocd-pod-enrichment/internal/config"
 	"argocd-pod-enrichment/internal/controller"
+	"argocd-pod-enrichment/pkg/kubernetesclient"
 
 	"github.com/spf13/cobra"
 )
@@ -43,8 +42,6 @@ func mainController() {
 	var tlsOpts []func(*tls.Config)
 	var scheme = runtime.NewScheme()
 	var setupLog = ctrl.Log.WithName("setup")
-	var configMapName string
-	flag.StringVar(&configMapName, "configmap-name", "argocd-pod-enrichment-cm", "Name of the ConfigMap for controller configuration.")
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
@@ -111,18 +108,20 @@ func mainController() {
 		os.Exit(1)
 	}
 
-	// Load controller config from ConfigMap
-	cfg, err := config.LoadConfigFromConfigMap(context.Background(), mgr.GetClient(), os.Getenv("NAMESPACE"), configMapName)
+
+
+	kubernetesClient, err := kubernetesclient.NewInClusterKubernetesClient()
 
 	if err != nil {
-		setupLog.Info("Using default config due to error loading configmap", "error", err)
+		setupLog.Error(err, "unable to create Kubernetes client")
+		os.Exit(1)
 	}
 
-	if err := (&controller.PodReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Config: cfg,
-	}).SetupWithManager(mgr); err != nil {
+       if err := (&controller.PodReconciler{
+	       Client: mgr.GetClient(),
+	       Scheme: mgr.GetScheme(),
+	       KubernetesClient: kubernetesClient,
+       }).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
 		os.Exit(1)
 	}

@@ -30,8 +30,7 @@
             "env": {
                 "KUBECONFIG": "${workspaceFolder}/.deploy/kubeconfig.yaml",
                 "NAMESPACE": "default",
-                "ARGOCD_SERVER": "argocd-server.default:80",
-                "ARGOCD_TOKEN": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhcmdvY2QiLCJzdWIiOiJhZG1pbjphcGlLZXkiLCJuYmYiOjE3NjExMjM5MzYsImlhdCI6MTc2MTEyMzkzNiwianRpIjoiNjljYzJhODQtMzliYy00NjU1LWJhM2ItZTU0ODAyNzRkYzA1In0.b93thnIWfgvcysprKBhOI78DbJQAreael4fVFQqkETU"
+                "ARGOCD_NAMESPACE": "argocd"
             }
         }
     ]

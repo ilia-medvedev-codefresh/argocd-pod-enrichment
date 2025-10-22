@@ -17,7 +17,10 @@ limitations under the License.
 package controller
 
 import (
-	"context"
+		"context"
+		"os"
+		metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+		"k8s.io/apimachinery/pkg/runtime/schema"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,14 +29,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	webhookconsts "argocd-pod-enrichment/pkg/consts/webhook"
-	"argocd-pod-enrichment/internal/config"
+	"argocd-pod-enrichment/pkg/kubernetesclient"
 )
 
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	Config *config.ControllerConfig
+	KubernetesClient *kubernetesclient.KubernetesClient
 }
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -58,8 +61,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Example usage of config: log the SomeOption value
-	log.Info("Controller config option", "SomeOption", r.Config.SomeOption)
 
 	// Skip reconciliation if the pod is being deleted
 	if pod.DeletionTimestamp != nil {
@@ -71,7 +72,51 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
 	}
+
 	pod.Annotations["test.codefresh.io/controller"] = "argocd-enrichment"
+
+	argocdApplicationName := pod.Labels[webhookconsts.ApplicationLabelKey]
+
+	if argocdApplicationName == "" {
+		log.Info("Pod does not have ArgoCD application label, skipping", "name", pod.Name, "namespace", pod.Namespace)
+		return ctrl.Result{}, nil
+	}
+
+	argocdApplicationNamespace := pod.Labels[webhookconsts.ApplicationNamespaceLabelKey]
+
+	if argocdApplicationNamespace == "" {
+		// Try to get from env
+		argocdApplicationNamespace = os.Getenv("ARGOCD_NAMESPACE")
+		if argocdApplicationNamespace == "" {
+			log.Info("Unable to find ArgoCD app namespace in label or ARGOCD_NAMESPACE env, skipping", "name", pod.Name, "namespace", pod.Namespace)
+			return ctrl.Result{}, nil
+		} else {
+			log.Info("Using ArgoCD app namespace from ARGOCD_NAMESPACE env", "argoNamespace", argocdApplicationNamespace, "name", pod.Name, "namespace", pod.Namespace)
+		}
+	}
+
+	// Fetch the ArgoCD Application using the dynamic client
+	// GVR for ArgoCD Application
+	gvr := schema.GroupVersionResource{
+		Group:    "argoproj.io",
+		Version:  "v1alpha1",
+		Resource: "applications",
+	}
+
+	appObj, err := r.KubernetesClient.DynamicClient.
+		Resource(gvr).
+		Namespace(argocdApplicationNamespace).
+		Get(ctx, argocdApplicationName, metav1.GetOptions{})
+	if err != nil {
+		log.Error(err, "unable to get ArgoCD Application", "appName", argocdApplicationName, "appNamespace", argocdApplicationNamespace)
+		return ctrl.Result{}, nil
+	}
+
+	log.Info("Fetched ArgoCD Application", "app", appObj.GetName())
+
+	if appObj.GetAnnotations()["codefresh.io/product"] != "" {
+		pod.Labels["codefresh.io/product"] = appObj.GetAnnotations()["codefresh.io/product"]
+	}
 
 	if err := r.Update(ctx, &pod); err != nil {
 		log.Error(err, "unable to update Pod with annotation")

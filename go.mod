@@ -5,18 +5,16 @@ go 1.24.6
 toolchain go1.24.9
 
 require (
-    github.com/argoproj/argo-cd/v2 v2.14.13
 	github.com/spf13/cobra v1.10.1
-	k8s.io/api v0.31.0
+	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
-	k8s.io/client-go v0.31.0
+	k8s.io/client-go v0.34.1
 	sigs.k8s.io/controller-runtime v0.22.3
 )
 
 require (
 	cel.dev/expr v0.24.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
-	github.com/argoproj/argo-cd/v2 v2.14.20 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
