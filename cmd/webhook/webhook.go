@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"os"
 
-	client "argocd-pod-enrichment-webhook/pkg/kubernetesclient"
-	argocdtracking "argocd-pod-enrichment-webhook/pkg/argocdresourcetracking"
+	client "argocd-pod-enrichment/pkg/kubernetesclient"
+	argocdtracking "argocd-pod-enrichment/pkg/argocdresourcetracking"
 
 	"github.com/spf13/cobra"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	consts "argocd-pod-enrichment-webhook/pkg/consts/webhook"
+	consts "argocd-pod-enrichment/pkg/consts/webhook"
 )
 
 var (

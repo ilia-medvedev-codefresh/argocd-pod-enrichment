@@ -1,5 +1,7 @@
 configs:
   cm:
     installationID: my-argocd
+    accounts.admin: login,apiKey
   params:
     application.namespaces: argocd-apps
+    server.insecure: "true"

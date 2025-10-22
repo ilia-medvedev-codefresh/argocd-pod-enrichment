@@ -1,0 +1,9 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: argocd-pod-enrichment-dev-cm
+data:
+  argocd.url: "http://argocd-server.argocd.svc.cluster.local:80"
+  argocd.tokenSecretName: "argocd-token"
+  argocd.tokenSecretKey: "argocd-token"
+  argocd.tokenSecretNamespace: "default"

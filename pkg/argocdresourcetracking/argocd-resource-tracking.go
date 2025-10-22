@@ -1,7 +1,7 @@
 package argocdresourcetracking
 
 import (
-	"argocd-pod-enrichment-webhook/pkg/consts/argocd"
+	"argocd-pod-enrichment/pkg/consts/argocd"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"os"
 	"strings"
