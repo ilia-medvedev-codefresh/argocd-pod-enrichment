@@ -1,7 +1,7 @@
 package consts
 
 const (
-	ApplicationLabelKey = "argocd-enrichment.codefresh.io/application-name"
-	ApplicationNamespaceLabelKey = "argocd-enrichment.codefresh.io/application-namespace"
-	InstallationIDLabelKey = "argocd-enrichment.codefresh.io/installation-id"
+	ApplicationLabelKey          = "codefresh.io/application-name"
+	ApplicationNamespaceLabelKey = "codefresh.io/application-namespace"
+	InstallationIDLabelKey       = "codefresh.io/installation-id"
 )
